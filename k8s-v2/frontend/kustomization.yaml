@@ -1,8 +1,0 @@
-# k8s-v2/frontend/kustomization.yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-resources:
-  - deployment-blue.yaml
-  - deployment-green.yaml
-  - service.yaml
