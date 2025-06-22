@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: cloudforge-ingress
+  name: cloudforgeingress
   namespace: cloudforge-prod
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
@@ -10,7 +10,7 @@ spec:
   ingressClassName: nginx
 
   rules:
-  - host: "frontend.local"
+  - host: "cloudforge-frontend.local"
     http:
       paths:
       - path: /
