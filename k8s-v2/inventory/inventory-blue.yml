@@ -35,13 +35,3 @@ spec:
               value: "http://inventory-service.cloudforge-prod.svc.cluster.local:8082"
             - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
               value: "broker.cloudforge-prod.svc.cluster.local:29092"
----
-
-
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: inventory-service-config
-  namespace: cloudforge-prod
-data:
-  SPRING_DATASOURCE_URL: "jdbc:mysql://mysql.cloudforge-prod.svc.cluster.local:3306/inventory_service"
