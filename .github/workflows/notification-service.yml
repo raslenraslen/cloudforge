@@ -1,4 +1,4 @@
-name: notification-service Pipeline
+name: Auth-service Pipeline
 
 on:
   push:
