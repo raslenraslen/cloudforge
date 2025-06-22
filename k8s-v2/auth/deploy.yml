@@ -67,7 +67,7 @@ kind: Service
 metadata:
   name: keycloak
 spec:
- 
+ type: NodePort
   selector:
     app: keycloak
   ports:
