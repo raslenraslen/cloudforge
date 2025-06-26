@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: product-service
-          image: raslenmissaoui061/product-service
+          image: raslenmissaoui061/product-azure
           env:
             - name: SPRING_DATA_MONGODB_URI
               valueFrom:
