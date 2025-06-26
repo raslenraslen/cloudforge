@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: inventory-service
-          image: raslenmissaoui061/inventoryservice
+          image: raslenmissaoui061/inventory-azure
           env:
             - name: SPRING_DATASOURCE_URL
               valueFrom:
