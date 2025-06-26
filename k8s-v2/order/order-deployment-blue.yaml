@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: order-service
-          image: raslenmissaoui061/orderservice
+          image: raslenmissaoui061/order-azure
           env:
             - name: SPRING_DATASOURCE_URL
               valueFrom:
