@@ -4,4 +4,4 @@ metadata:
   name: product-service-config
   namespace: cloudforge-prod
 data:
-  SPRING_DATA_MONGODB_URI: "mongodb://root:password@mongodb.cloudforge.svc.cluster.local:27017/product-service?authSource=admin"
+  SPRING_DATA_MONGODB_URI: "mongodb://root:password@mongodb.cloudforge-prod.svc.cluster.local:27017/product-service?authSource=admin"
