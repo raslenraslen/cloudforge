@@ -3,7 +3,7 @@ kind: Service
 metadata:
   name: product-service
 spec:
-  type: NodePort
+  
   selector:
     app: product-service
     color: blue  
