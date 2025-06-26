@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: raslenmissaoui061/frontend-micro
+          image: raslenmissaoui061/frontend-azure
           ports:
             - containerPort: 4200
