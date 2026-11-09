@@ -1,0 +1,148 @@
+name: frontend
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend.yml"
+
+env:
+  SERVICE_DIR: frontend
+  IMAGE: raslenmissaoui061/frontend-micro
+  NAMESPACE: cloudforge
+  SONAR_HOST_URL: http://192.168.216.131:9000
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: npm ci --legacy-peer-deps
+      - name: Production build
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: npm run build -- --configuration=production
+
+  trivy-fs:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan dependencies for vulnerabilities
+        run: trivy fs --scanners vuln --format table --output trivy-fs-report.txt "$SERVICE_DIR"
+      - name: Upload Trivy report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-report
+          path: trivy-fs-report.txt
+
+  sonarqube:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: SonarQube scan
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        with:
+          projectBaseDir: ${{ env.SERVICE_DIR }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+
+  docker:
+    if: github.event_name == 'push'
+    runs-on: self-hosted
+    needs: [trivy-fs, sonarqube]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: raslenmissaoui061
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push (tagged with the commit SHA)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.SERVICE_DIR }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+
+  trivy-image:
+    runs-on: self-hosted
+    needs: docker
+    steps:
+      - name: Scan the pushed image
+        run: trivy image --severity HIGH,CRITICAL --ignore-unfixed --format table --output trivy-image-report.txt "$IMAGE:${{ github.sha }}"
+      - name: Upload Trivy image report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-image-report
+          path: trivy-image-report.txt
+
+  deploy:
+    runs-on: self-hosted
+    needs: trivy-image
+    env:
+      APP: frontend
+      CONTAINER: frontend
+      COLOR_LABEL: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the blue and green Deployments and the Service (first deploy only)
+        run: |
+          for color in blue green; do
+            kubectl get deployment "$APP-$color" -n "$NAMESPACE" >/dev/null 2>&1 \
+              || kubectl apply -f "k8s/frontend-deployment-$color.yaml" -n "$NAMESPACE"
+          done
+          kubectl get service "$APP" -n "$NAMESPACE" >/dev/null 2>&1 \
+            || kubectl apply -f "k8s/frontend-service.yaml" -n "$NAMESPACE"
+
+      - name: Find the idle color
+        run: |
+          active=$(kubectl get service "$APP" -n "$NAMESPACE" -o jsonpath="{.spec.selector.$COLOR_LABEL}")
+          if [ "$active" = "blue" ]; then idle=green; else idle=blue; fi
+          echo "Live: ${active:-none}, deploying to: $idle"
+          echo "IDLE=$idle" >> "$GITHUB_ENV"
+
+      - name: Deploy the new image to the idle color
+        run: |
+          kubectl set image "deployment/$APP-$IDLE" "$CONTAINER=$IMAGE:${{ github.sha }}" -n "$NAMESPACE"
+          kubectl rollout status "deployment/$APP-$IDLE" -n "$NAMESPACE" --timeout=600s
+
+      - name: Switch traffic to the idle color
+        run: |
+          kubectl patch service "$APP" -n "$NAMESPACE" \
+            -p "{\"spec\":{\"selector\":{\"app\":\"$APP\",\"$COLOR_LABEL\":\"$IDLE\"}}}"
+          echo "Traffic now goes to $APP-$IDLE. Roll back by patching the selector to the other color."
+
+  notify:
+    if: always() && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    needs: [build, trivy-fs, sonarqube, docker, trivy-image, deploy]
+    steps:
+      - name: Send the result to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          FAILED: ${{ contains(needs.*.result, 'failure') }}
+        run: |
+          if [ "$FAILED" = "true" ]; then status="failed"; else status="succeeded"; fi
+          message="**frontend** $status on \`${{ github.ref_name }}\` by ${{ github.actor }}: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -fsS -H "Content-Type: application/json" -X POST \
+            -d "$(jq -n --arg content "$message" '{content: $content}')" "$DISCORD_WEBHOOK"

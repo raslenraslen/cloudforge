@@ -1,194 +1,98 @@
-name: Auth-service Pipeline
+name: notification-service
 
 on:
   push:
     branches: ["main"]
     paths:
-      - 'notification-service/**'
-      - '.github/workflows/notification-service.yml'
+      - "notification-service/**"
+      - ".github/workflows/notification-service.yml"
   pull_request:
     branches: ["main"]
     paths:
-      - 'notification-service/**'
-      - '.github/workflows/notification-service.yml'
+      - "notification-service/**"
+      - ".github/workflows/notification-service.yml"
 
-
+# id-token lets the runner log in to Vault with GitHub's OIDC token (JWT auth),
+# so no Vault credential is stored in GitHub.
 permissions:
-  id-token: write   
+  id-token: write
   contents: read
 
-# Variables globales pour le pipeline
 env:
-  SERVICE_DIR: ./notification-service
-  IMAGE_NAME: raslenmissaoui061/notification-service
-  K8S_NAMESPACE: cloudforge
-  
+  SERVICE_DIR: notification-service
+  SONAR_HOST_URL: http://192.168.216.131:9000
+
 jobs:
-  ###################################################
-  # JOB 1: Récupérer les secrets depuis VAULT
-  ###################################################
-  get-secrets:
-    runs-on: self-hosted # Peut tourner sur un runner public car n'accède pas à l'infra
-    outputs:
-      docker_password: ${{ steps.vault.outputs.DOCKER_PASSWORD }}
-      SONAR_TOKEN: ${{ steps.vault.outputs.SONAR_TOKEN }}
-      discord_webhook: ${{ steps.vault.outputs.DISCORD_WEBHOOK }}
+  build:
+    runs-on: ubuntu-latest
     steps:
-      - name: 'Import Secrets from Vault'
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          cache: maven
+      - name: Build (tests skipped)
+        working-directory: ${{ env.SERVICE_DIR }}
+        run: mvn -B clean package -DskipTests
+
+  trivy-fs:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan dependencies for vulnerabilities
+        run: trivy fs --scanners vuln --format table --output trivy-fs-report.txt "$SERVICE_DIR"
+      - name: Upload Trivy report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-fs-report
+          path: trivy-fs-report.txt
+
+  sonarqube:
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read the Sonar token from Vault
         id: vault
         uses: hashicorp/vault-action@v2
         with:
-          # IMPORTANT: Remplacez par l'URL publique de votre Vault
           url: http://192.168.216.131:32441
           method: jwt
           role: notification-service-role
-          # Chemin vers les secrets pour ce service spécifique
           secrets: |
-            secret/data/ci/notification-service DOCKER_PASSWORD | DOCKER_PASSWORD ;
-            secret/data/ci/notification-service SONAR_TOKEN | SONAR_TOKEN ;
-            secret/data/ci/notification-service DISCORD_WEBHOOK | DISCORD_WEBHOOK ;
-
-      - name: 'Debug Vault Outputs'
-        run: |
-          if [ -z "${{ steps.vault.outputs.SONAR_TOKEN }}" ]; then
-            echo "::error::ÉCHEC : Le SONAR_TOKEN est vide. Le rôle Vault est probablement mal configuré pour le dépôt 'raslenraslen/cloud--forge'."
-            exit 1
-          else
-            echo "✅ SUCCÈS : Le SONAR_TOKEN a bien été récupéré de Vault."
-          fi
-
-  ###################################################
-  # JOB 2: Compilation et Tests
-  ###################################################
-  security-check:
-    runs-on: self-hosted
-    needs: get-secrets
-    steps:
-      - name: 🚚 Checkout code
-        uses: actions/checkout@v4
-
-      - name: 📥 Download existing .done files
-        uses: actions/download-artifact@v4
-        with:
-          
-          name: notification-done-files 
-          path: ./.github/done-files/
-        continue-on-error: true
-
-      - name: 🔍 Check if security scan needed
-        id: check_scan
-        run: |
-          CHANGES_DETECTED="${{ needs.build_and_test.outputs.changes_detected }}"
-          if [ -f ./.github/done-files/security.done ] && [ "$CHANGES_DETECTED" == "false" ]; then
-            echo "skip_scan=true" >> $GITHUB_ENV
-          else
-            echo "skip_scan=false" >> $GITHUB_ENV
-          fi
-
-      - name: 🔐 Run Trivy Scan
-        run: trivy fs --security-checks vuln --format table -o fs-report.txt ./notification-service/
-
-      - name: 📌 Mark security as done
-        if: ${{ env.skip_scan != 'true' }}
-        run: |
-          mkdir -p ./.github/done-files/
-          echo "done" > ./.github/done-files/security.done
-
-      - name: 📤 Upload updated .done files
-        uses: actions/upload-artifact@v4
-        with:
-          
-          name: notification-done-files 
-          path: ./.github/done-files/
-          retention-days: 3
-
-
-  ###################################################
-  # JOB 3: Analyse de Sécurité et Qualité
-  ###################################################
-  SonarQube_Analysis:
-    runs-on: self-hosted
-    needs: [ security-check , get-secrets ]
-    steps:
-      - name: Checkout code with full history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download sonar.done if exists
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: sonar-done
-          path: .
-
-      - name: Check if sonar already done
-        id: check_sonar
-        run: |
-          if [ -f sonar.done ]; then
-            echo "skip=true" >> $GITHUB_ENV
-          else
-            echo "skip=false" >> $GITHUB_ENV
-          fi
-
-      - name: SonarQube Scan
-        if: ${{ env.skip != 'true' }}
+            secret/data/ci/notification-service SONAR_TOKEN | SONAR_TOKEN
+      - name: SonarQube scan
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         with:
-          projectBaseDir: ./notification-service
-
+          projectBaseDir: ${{ env.SERVICE_DIR }}
         env:
-          SONAR_TOKEN: ${{ needs.get-secrets.outputs.SONAR_TOKEN }}
-          SONAR_HOST_URL: http://192.168.216.131:9000/
+          SONAR_TOKEN: ${{ steps.vault.outputs.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
 
-      - name: Download SonarQube JSON Report
-        if: ${{ env.skip != 'true' }}
-        run: |
-          curl -s -u "${{ secrets.SONAR_TOKEN }}:" \
-            "http://192.168.216.131:9000/api/issues/search?componentKeys=CloudForge&resolved=false" \
-            -o sonar-report.json
-
-      - name: Upload SonarQube report
-        if: ${{ env.skip != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: sonar-report
-          path: sonar-report.json
-
-      - name: Mark sonar done
-        if: ${{ env.skip != 'true' }}
-        run: echo "Sonar done" > sonar.done
-
-      - name: Upload sonar.done
-        if: ${{ env.skip != 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: sonar-done
-          path: sonar.done
-
-
-  
-  notify-discord:
-    runs-on: ubuntu-latest
-    needs: [get-secrets, SonarQube_Analysis,  security-check]
-    if: always() # S'exécute même si un job échoue
+  notify:
+    if: always() && github.event_name == 'push'
+    runs-on: self-hosted
+    needs: [build, trivy-fs, sonarqube]
     steps:
-      - name: Send Discord notification
+      - name: Read the Discord webhook from Vault
+        id: vault
+        uses: hashicorp/vault-action@v2
+        with:
+          url: http://192.168.216.131:32441
+          method: jwt
+          role: notification-service-role
+          secrets: |
+            secret/data/ci/notification-service DISCORD_WEBHOOK | DISCORD_WEBHOOK
+      - name: Send the result to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ steps.vault.outputs.DISCORD_WEBHOOK }}
+          FAILED: ${{ contains(needs.*.result, 'failure') }}
         run: |
-          STATUS="${{ needs.deploy-to-k8s.result }}"
-          if [[ "$STATUS" == "success" ]]; then
-            COLOR="28a745" 
-            EMOJI="✅"
-            MSG="Déploiement réussi"
-          else
-            COLOR="dc3545" # Rouge
-            EMOJI="❌"
-            MSG="Déploiement échoué"
-          fi
-          
-          # Webhook récupéré de Vault
-          WEBHOOK_URL="${{ needs.get-secrets.outputs.discord_webhook }}"
-          
-          curl -H "Content-Type: application/json" -X POST \
-               -d '{"embeds": [{"title": "'"$EMOJI"' Pipeline **notification-service**", "description": "'"$MSG"' sur la branche `main`.", "color": "'"$COLOR"'", "footer": {"text": "Commit par ${{ github.actor }}"}, "timestamp": "'"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"'"}]}' \
-               "$WEBHOOK_URL"
+          if [ "$FAILED" = "true" ]; then status="failed"; else status="succeeded"; fi
+          message="**notification-service** $status on \`${{ github.ref_name }}\` by ${{ github.actor }}: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -fsS -H "Content-Type: application/json" -X POST \
+            -d "$(jq -n --arg content "$message" '{content: $content}')" "$DISCORD_WEBHOOK"

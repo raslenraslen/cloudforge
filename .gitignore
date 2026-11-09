@@ -41,3 +41,10 @@ build/
 /data/
 /docker/tempo/tempo-data/
 /docker/tempo/tempo-data/
+
+### IntelliJ IDEA (whole folder) ###
+.idea/
+
+### Node ###
+node_modules/
+.angular/
