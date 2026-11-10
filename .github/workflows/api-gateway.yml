@@ -6,11 +6,13 @@ on:
     paths:
       - "api-gateway/**"
       - ".github/workflows/api-gateway.yml"
+      - "pom.xml"   # parent POM of this service
   pull_request:
     branches: ["main"]
     paths:
       - "api-gateway/**"
       - ".github/workflows/api-gateway.yml"
+      - "pom.xml"   # parent POM of this service
 
 env:
   SERVICE_DIR: api-gateway

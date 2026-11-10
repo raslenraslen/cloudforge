@@ -6,11 +6,13 @@ on:
     paths:
       - "notification-service/**"
       - ".github/workflows/notification-service.yml"
+      - "pom.xml"   # parent POM of this service
   pull_request:
     branches: ["main"]
     paths:
       - "notification-service/**"
       - ".github/workflows/notification-service.yml"
+      - "pom.xml"   # parent POM of this service
 
 # id-token lets the runner log in to Vault with GitHub's OIDC token (JWT auth),
 # so no Vault credential is stored in GitHub.
