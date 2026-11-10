@@ -107,6 +107,7 @@
             <plugin>
                 <groupId>org.apache.avro</groupId>
                 <artifactId>avro-maven-plugin</artifactId>
+                <version>1.11.3</version> <!-- same as the avro library above -->
                 <executions>
                     <execution>
                         <id>schemas</id>
