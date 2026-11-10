@@ -98,13 +98,13 @@ jobs:
 
       - name: Create the blue and green Deployments and the Service (first deploy only)
         run: |
-          kubectl apply -f "k8s/product-service-config.yml" -n "$NAMESPACE"
+          kubectl apply -f "k8s/pipeline/product-service-config.yml" -n "$NAMESPACE"
           for color in blue green; do
             kubectl get deployment "$APP-$color" -n "$NAMESPACE" >/dev/null 2>&1 \
-              || kubectl apply -f "k8s/product-service-$color.yml" -n "$NAMESPACE"
+              || kubectl apply -f "k8s/pipeline/product-service-$color.yml" -n "$NAMESPACE"
           done
           kubectl get service "$APP" -n "$NAMESPACE" >/dev/null 2>&1 \
-            || kubectl apply -f "k8s/productservice-service.yml" -n "$NAMESPACE"
+            || kubectl apply -f "k8s/pipeline/productservice-service.yml" -n "$NAMESPACE"
 
       - name: Find the idle color
         run: |

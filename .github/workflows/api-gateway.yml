@@ -89,7 +89,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Apply the manifest and roll out the new image
         run: |
-          kubectl apply -f k8s/api-gateway.yml -n "$NAMESPACE"
+          kubectl apply -f k8s/pipeline/api-gateway.yml -n "$NAMESPACE"
           kubectl set image deployment/api-gateway "api-gateway=$IMAGE:${{ github.sha }}" -n "$NAMESPACE"
           kubectl rollout status deployment/api-gateway -n "$NAMESPACE" --timeout=600s
 

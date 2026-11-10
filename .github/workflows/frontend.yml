@@ -109,10 +109,10 @@ jobs:
         run: |
           for color in blue green; do
             kubectl get deployment "$APP-$color" -n "$NAMESPACE" >/dev/null 2>&1 \
-              || kubectl apply -f "k8s/frontend-deployment-$color.yaml" -n "$NAMESPACE"
+              || kubectl apply -f "k8s/pipeline/frontend-deployment-$color.yaml" -n "$NAMESPACE"
           done
           kubectl get service "$APP" -n "$NAMESPACE" >/dev/null 2>&1 \
-            || kubectl apply -f "k8s/frontend-service.yaml" -n "$NAMESPACE"
+            || kubectl apply -f "k8s/pipeline/frontend-service.yaml" -n "$NAMESPACE"
 
       - name: Find the idle color
         run: |

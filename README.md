@@ -78,7 +78,7 @@ kubectl patch service product-service -n cloudforge \
 
 ## Application
 
-![Application architecture](img.png)
+![Application architecture](docs/images/application-architecture.png)
 
 An API gateway (Spring Cloud Gateway with Resilience4j) in front of four services, secured with Keycloak:
 
@@ -94,10 +94,11 @@ An API gateway (Spring Cloud Gateway with Resilience4j) in front of four service
 
 ```text
 .github/workflows/       one pipeline per service
-k8s/                     manifests deployed by the pipelines (namespace cloudforge)
-k8s-prod/                second environment, applied by hand (namespace cloudforge-prod):
+k8s/
+  pipeline/              manifests deployed by the pipelines (namespace cloudforge)
+  prod/                  second environment, applied by hand (namespace cloudforge-prod):
                          Keycloak and its database, Ingress, LoadBalancer frontend
-k8s-monitoring/          Prometheus, Alertmanager and alert rules, Grafana, Loki (namespace monitoring)
+  monitoring/            Prometheus, Alertmanager and alert rules, Grafana, Loki (namespace monitoring)
 docker-compose.yml       local infrastructure: databases, Kafka, Keycloak, Prometheus, Grafana, Loki, Tempo
 docker/                  configuration files for docker-compose
 <service>/               application code and Dockerfile of each service
@@ -120,7 +121,7 @@ docker/                  configuration files for docker-compose
 
 ```bash
 kubectl create namespace monitoring
-kubectl apply -f k8s-monitoring/
+kubectl apply -f k8s/monitoring/
 ```
 
 **Local infrastructure** for development:
@@ -133,4 +134,4 @@ docker compose up -d
 
 - Unit tests run only for product-service. The other Java builds skip them, and the frontend tests are not run in CI yet.
 - The frontend image runs the Angular development server (`ng serve`), not a static build behind nginx.
-- `k8s-prod/` is not deployed by the pipelines.
+- `k8s/prod/` is not deployed by the pipelines.
